@@ -57,6 +57,8 @@ npm run submit
 ```
 
 By default, the script skips any requisition IDs already recorded in `submitted_jobs.json`.
+Eligible jobs are processed newest first using descending Tesla requisition ID, since the
+careers listing API does not expose a posting timestamp.
 
 Submit only specific job IDs:
 
@@ -142,5 +144,5 @@ Edit these fields in `profile.json` or `profile.local.json`:
 - The script expects a visible Chrome window with remote debugging enabled on `127.0.0.1:9222`.
 - It filters for US Tesla internships that match software / data / technical role patterns in the script.
 - It includes a submit-payload fix for Tesla's occasional invalid `eeoCopyUrl` value.
-- Successful submissions are written to `submitted_jobs.json` so later full reruns skip those requisition IDs.
+- Confirmed submissions are written atomically to `submitted_jobs.json` so later full reruns skip those requisition IDs.
 - If Tesla shows a new or unusual question page, stop and inspect before blindly continuing.

@@ -6,7 +6,8 @@
   "scripts": {
     "list": "node scripts/apply_tesla_roles.js --mode list",
     "dry-run": "node scripts/apply_tesla_roles.js --mode dry-run",
-    "submit": "node scripts/apply_tesla_roles.js --mode submit"
+    "submit": "node scripts/apply_tesla_roles.js --mode submit",
+    "test": "node --test"
   },
   "dependencies": {
     "playwright": "^1.54.1"

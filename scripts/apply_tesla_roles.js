@@ -2,6 +2,10 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+const {
+  loadSubmittedJobs,
+  rememberSubmittedJob
+} = require('./submission_history');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SUBMITTED_JOBS_PATH = path.join(ROOT_DIR, 'submitted_jobs.json');
@@ -78,38 +82,6 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-function loadSubmittedJobs() {
-  if (!fs.existsSync(SUBMITTED_JOBS_PATH)) {
-    return new Map();
-  }
-
-  try {
-    const entries = JSON.parse(fs.readFileSync(SUBMITTED_JOBS_PATH, 'utf8'));
-    return new Map(entries.map((entry) => [String(entry.id), entry]));
-  } catch (error) {
-    throw new Error(`Could not parse ${path.basename(SUBMITTED_JOBS_PATH)}: ${error.message}`);
-  }
-}
-
-function saveSubmittedJobs(submittedJobs) {
-  const entries = [...submittedJobs.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)));
-  fs.writeFileSync(SUBMITTED_JOBS_PATH, `${JSON.stringify(entries, null, 2)}\n`);
-}
-
-function rememberSubmittedJob(submittedJobs, job, status) {
-  if (!['submitted-confirmation-reached', 'already-submitted-or-confirmed'].includes(status)) {
-    return;
-  }
-
-  submittedJobs.set(String(job.id), {
-    id: String(job.id),
-    title: job.title,
-    status,
-    savedAt: new Date().toISOString()
-  });
-  saveSubmittedJobs(submittedJobs);
-}
-
 async function pause(page, multiplier = 1) {
   await page.waitForTimeout(Math.max(0, slowMs() * multiplier));
 }
@@ -182,7 +154,7 @@ async function eligibleJobs(page) {
           location: data.lookup.locations[job.l],
           url: `https://www.tesla.com/careers/search/job/${job.t.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${job.id}`
         }))
-        .sort((a, b) => a.title.localeCompare(b.title));
+        .sort((a, b) => Number(b.id) - Number(a.id));
     });
   }, { includeSource: INCLUDE.source, excludeSource: EXCLUDE.source });
 }
@@ -350,7 +322,11 @@ async function fillStep4(page, shouldSubmit) {
   await pause(page, 4);
   if (shouldSubmit) {
     await page.getByRole('button', { name: /^submit$/i }).click({ timeout: 15000 });
-    await page.waitForTimeout(9000);
+    await page.waitForFunction(() => {
+      const text = document.body.innerText;
+      return /Your Application Has Been Received|application submitted|thank you|successfully submitted|we have received/i.test(text) ||
+        /An error has occurred|unexpected error|try again later/i.test(text);
+    }, undefined, { timeout: 20000 }).catch(() => {});
   }
 }
 
@@ -385,9 +361,8 @@ async function applyJob(page, job, shouldSubmit) {
   if (/An error has occurred|unexpected error|try again later/i.test(finalText)) {
     return { id: job.id, title: job.title, status: 'submit-error-page', text: finalText.slice(0, 1600) };
   }
-  const stillOnFinalStep = /Step 4 of 4/i.test(finalText);
-  const confirmed = /application submitted|thank you|successfully submitted|we have received/i.test(finalText);
-  const status = shouldSubmit ? (confirmed || !stillOnFinalStep ? 'submitted-confirmation-reached' : 'submit-attempt-still-on-step4') : 'filled-not-submitted';
+  const confirmed = /Your Application Has Been Received|application submitted|thank you|successfully submitted|we have received/i.test(finalText);
+  const status = shouldSubmit ? (confirmed ? 'submitted-confirmation-reached' : 'submit-attempt-unconfirmed') : 'filled-not-submitted';
   return { id: job.id, title: job.title, status, text: finalText.slice(0, 1600) };
 }
 
@@ -397,7 +372,7 @@ async function applyJob(page, job, shouldSubmit) {
   const skip = argSet('--skip');
   const limit = Number(argValue('--limit', '0'));
   const ignoreHistory = hasFlag('--ignore-history');
-  const submittedJobs = loadSubmittedJobs();
+  const submittedJobs = loadSubmittedJobs(SUBMITTED_JOBS_PATH);
   const { browser, context, page } = await getPage();
   await installSubmitPayloadSanitizer(context);
   const jobs = (await eligibleJobs(page)).filter((job) => (!ids.size || ids.has(job.id)) && !skip.has(job.id));
@@ -413,7 +388,7 @@ async function applyJob(page, job, shouldSubmit) {
   for (const job of selected) {
     try {
       results.push(await applyJob(page, job, shouldSubmit));
-      rememberSubmittedJob(submittedJobs, job, results[results.length - 1].status);
+      rememberSubmittedJob(SUBMITTED_JOBS_PATH, submittedJobs, job, results[results.length - 1].status);
       console.log(JSON.stringify(results[results.length - 1], null, 2));
     } catch (error) {
       const failure = { id: job.id, title: job.title, status: 'error', error: error.message };
