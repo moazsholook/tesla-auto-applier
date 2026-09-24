@@ -1,3 +1,14 @@
+# Disclaimer:
+This project was created as a personal productivity tool, not as a means of bypassing, overwhelming, or interfering with Tesla's recruiting process.
+
+I originally built it after noticing that many Tesla internship applications asked for the same information across a large number of individual job postings. The goal was simply to reduce repetitive data entry when applying to positions I had already reviewed and believed I was qualified for. I later shared the project because friends and other students could benefit from the same workflow.
+
+This tool is intended to assist with submitting applications, not deciding which jobs to apply to. Users should review each position themselves and only apply to roles they genuinely believe match their qualifications, experience, location, work authorization, and interests.
+
+Users are responsible for ensuring that all information submitted through the tool is accurate and truthful and for complying with Tesla's applicable terms, policies, and recruiting requirements.
+
+This project is not affiliated with, endorsed by, or associated with Tesla, Inc. It is an independent open-source project intended for personal and educational use.
+
 # Tesla Careers Applier
 
 Automates Tesla internship applications from a visible Chrome session using Playwright.
